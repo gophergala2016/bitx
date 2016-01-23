@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package streamerpb;
+
+
+message TradeUpdate {
+  int64 base_e8 = 1;
+  int64 counter_e8 = 2;
+  int64 order_id = 3;
+}
+
+message CreateUpdate {
+  Order order = 1;
+}
+
+message DeleteUpdate {
+  int64 order_id = 1;
+}
+
+
+message Update {
+  int64 sequence = 1;
+  repeated TradeUpdate trade_update = 2;
+  CreateUpdate create_update = 3;
+  DeleteUpdate delete_update = 4;
+}
+
+
+
+message Order {
+  enum Type {
+    UNKNOWN = 0;
+    BID = 1;
+    ASK = 2;
+  }
+  Type type = 1;
+  int64 order_id = 2;
+  int64 price_e8 = 3;
+  int64 volume_e8 = 4;
+}
+
+message OrderBook {
+  int64 sequence = 1;
+  repeated Order bids = 2;
+  repeated Order asks = 3;
+}
+
+
+message StreamUpdatesRequest {
+  string pair = 1;
+}
+
+message GetOrderBookRequest {
+  string pair = 1;
+}
+
+service Streamer {
+  rpc StreamUpdates(StreamUpdatesRequest) returns (stream Update) {}
+  rpc GetOrderBook(GetOrderBookRequest) returns (OrderBook) {}
+}
