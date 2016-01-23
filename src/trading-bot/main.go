@@ -10,8 +10,8 @@ import (
 	"github.com/bitx/bitx-go"
 )
 
-var APIKey = flag.String("api_key", "g7nxtmahc66ec", "API key")
-var APISecret = flag.String("api_secret", "62HFnk7EDpKcKMiTb11wt0O2-uPuQbCFrKC_8heId2c", "API secret")
+var APIKey = flag.String("api_key", "", "API key")
+var APISecret = flag.String("api_secret", "", "API secret")
 
 
 func main() {
