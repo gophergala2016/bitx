@@ -57,13 +57,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	var lastOrder *bitx.Order;
 	for doOrder {
-		orderId, err := placeNextOrder(c, bid, ask, spread, 0.0005)
+		lastOrder, err = placeNextOrder(c, lastOrder, bid, ask, spread, 0.0005)
 		if err != nil {
 			log.Fatalf("Could not place next order: %s", err)
 			os.Exit(1)
 		}
-		fmt.Printf("ORDER PLACED: %s\n", orderId)
+
+		doOrder, err = promptYesNo("Place another trade if ready?")
+		if err != nil {
+			log.Fatalf("Could not get user confirmation: %s", err)
+			os.Exit(1)
+		}
 
 		bid, ask, spread, err = getMarketData(c)
 		if err != nil {
@@ -71,12 +77,6 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Printf("Current market\n\tspread: %f\n\tbid: %f\n\task: %f\n", spread, bid, ask)
-
-		doOrder, err = promptYesNo("Place another trade?")
-		if err != nil {
-			log.Fatalf("Could not get user confirmation: %s", err)
-			os.Exit(1)
-		}
 	}
 
 	fmt.Println("\nBot finished working. Bye.")
@@ -102,37 +102,56 @@ func promptYesNo(question string) (yes bool, err error) {
 	text, _ := reader.ReadString('\n')
 
 	firstChr := strings.ToLower(text)[0]
-//	fmt.Printf("Text: '%s', first char: '%v'\n", text, firstChr)
 	if text == "" || firstChr == 'y' || firstChr == 10 {
 		return true, nil
 	}
 	return false, nil
 }
 
-func placeNextOrder(c *bitx.Client, bid, ask, spread, volume float64) (orderId string, err error) {
-	fmt.Println("Fetching last order...")
-	orders, err := c.ListOrders(*Pair)
-	if err != nil {
-		return "", err
+func placeNextOrder(c *bitx.Client, lastOrder *bitx.Order, bid, ask, spread, volume float64) (order *bitx.Order, err error) {
+	// Fetch or refresh order
+	if lastOrder == nil {
+		fmt.Println("Fetching NEW last order...")
+		orders, err := c.ListOrders(*Pair)
+		if err != nil {
+			return lastOrder, err
+		}
+		if len(orders) > 0 {
+			// First order in this run
+			lastOrder = &orders[0]
+		}
+	} else {
+		// Refresh order
+		fmt.Printf("Refreshing last order (%s)...\n", lastOrder.Id)
+		lastOrder, err = c.GetOrder(lastOrder.Id)
+		if err != nil {
+			return lastOrder, err
+		}
 	}
 
+	// Check if last order has executed
+	fmt.Printf("Last order: %+v\n", lastOrder)
+	if lastOrder.State != bitx.Complete {
+		fmt.Println("Order has not completed yet.")
+		return lastOrder, nil
+	}
+
+	// Time to place a new one
 	orderType := bitx.BID
 	price := bid + 1;
-	if len(orders) > 0 {
-		// First order in this run
-		if orders[0].Type == bitx.BID {
-			orderType = bitx.ASK
-			price = ask - 1;
-		}
-		fmt.Printf("Last order was of type %s (%+v)\n", orders[0].Type, orders[0])
-	} else {
-		fmt.Println("No previous orders")
+	if lastOrder != nil && lastOrder.Type == bitx.BID {
+		orderType = bitx.ASK
+		price = ask - 1;
 	}
 	return placeOrder(c, orderType, price, volume)
 }
 
-func placeOrder(c *bitx.Client, orderType bitx.OrderType, price, volume float64) (orderId string, err error) {
+func placeOrder(c *bitx.Client, orderType bitx.OrderType, price, volume float64) (*bitx.Order, error) {
 	fmt.Printf("Placing order of type: %s, price: %f, volume: %f\n", orderType, price, volume)
-	return c.PostOrder(*Pair, orderType, volume, price)
-//	return "1", nil
+	orderId, err := c.PostOrder(*Pair, orderType, volume, price)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("Order placed! Fetching order details: %s\n", orderId)
+	return c.GetOrder(orderId)
 }
