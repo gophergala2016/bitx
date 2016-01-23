@@ -130,24 +130,20 @@ func (ob *OrderBook) String() string {
 	var buf bytes.Buffer
 
 	fmt.Fprintf(&buf, "\n")
-	printSorted(&buf, ob.Asks, -1)
+	printSorted(&buf, ob.Asks)
 	fmt.Fprintf(&buf, "\n")
-	printSorted(&buf, ob.Bids, -1)
+	printSorted(&buf, ob.Bids)
 
 	return string(buf.Bytes())
 }
 
-func printSorted(w io.Writer, orders map[int64]*Order, dir int) {
+func printSorted(w io.Writer, orders map[int64]*Order) {
 	orderList := make(OrderList, 0)
 	for _, o := range orders {
 		orderList = append(orderList, o)
 	}
 
-	if dir > 0 {
-		sort.Sort(orderList)
-	} else {
-		sort.Sort(sort.Reverse(orderList))
-	}
+	sort.Sort(sort.Reverse(orderList))
 
 	for _, o := range orderList {
 		fmt.Fprintf(w, "%.2f %.6f\n", float64(o.price)/1e8,
