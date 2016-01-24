@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"trading-bot/market_maker_bot"
+	"trading-bot/marketmaker"
 )
 
 var APIKey = flag.String("api_key", "", "API key")
@@ -17,7 +17,7 @@ func main() {
 	flag.Parse()
 	fmt.Println("Welcome to the BitX trading bot playground!\n")
 
-	bot := market_maker_bot.NewBot(*APIKey, *APISecret, *Pair)
+	bot := marketmaker.NewBot(*APIKey, *APISecret, *Pair)
 	err := bot.Execute()
 
 	if err != nil {

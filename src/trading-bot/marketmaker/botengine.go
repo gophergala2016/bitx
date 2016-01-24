@@ -1,4 +1,4 @@
-package market_maker_bot
+package marketmaker
 
 import (
 	"bufio"
@@ -9,6 +9,8 @@ import (
 
 	"github.com/bitx/bitx-go"
 )
+
+const minVolume = 0.005
 
 type MarketMakerBot struct {
 	Name string
@@ -46,7 +48,7 @@ func(bot *MarketMakerBot) Execute() error {
 	}
 	fmt.Printf("Current balance: %f (Reserved: %f)\n", bal, res)
 
-	if (bal <= 0.005) {
+	if (bal <= minVolume) {
 		return errors.New("Insuficcient balance to place an order.")
 	}
 
@@ -63,7 +65,7 @@ func(bot *MarketMakerBot) Execute() error {
 
 	var lastOrder *bitx.Order;
 	for doOrder {
-		lastOrder, err = bot.placeNextOrder(lastOrder, bid, ask, spread, 0.0005)
+		lastOrder, err = bot.placeNextOrder(lastOrder, bid, ask, spread, minVolume)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Could not place next order: %s", err))
 		}
@@ -101,13 +103,22 @@ func getMarketData(c *bitx.Client, pair string) (bid, ask, spread float64, err e
 func promptYesNo(question string) (yes bool, err error) {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("%s [Y/n] ", question)
-	text, _ := reader.ReadString('\n')
-
-	firstChr := strings.ToLower(text)[0]
-	if text == "" || firstChr == 'y' || firstChr == 10 {
-		return true, nil
+	text, err := reader.ReadString('\n')
+	if err != nil {
+		return false, err
 	}
-	return false, nil
+	return isYesString(text), nil
+}
+
+func isYesString(text string) bool {
+	if text == "" {
+		return true
+	}
+	firstChr := strings.ToLower(text)[0]
+	if firstChr == 'y' || firstChr == 10 {
+		return true
+	}
+	return false
 }
 
 func(bot *MarketMakerBot) placeNextOrder(lastOrder *bitx.Order, bid, ask, spread, volume float64) (order *bitx.Order, err error) {
