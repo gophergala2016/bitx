@@ -43,3 +43,29 @@ func TestShouldPlaceNextOrder(t *testing.T) {
 		t.Errorf("Expected to place next order for Complete lastOrder")
 	}
 }
+
+func TestGetNextOrderParamsForAsk(t *testing.T) {
+	orderType, price := getNextOrderParams(marketState{
+		bid:       100,
+		lastOrder: &bitx.Order{Type: bitx.ASK},
+	})
+	if orderType != bitx.BID {
+		t.Errorf("Expected OrderType of BID, got %s", orderType)
+	}
+	if price != 101 {
+		t.Errorf("Expected price of 101, got %f", price)
+	}
+}
+
+func TestGetNextOrderParamsForBid(t *testing.T) {
+	orderType, price := getNextOrderParams(marketState{
+		ask:       100,
+		lastOrder: &bitx.Order{Type: bitx.BID},
+	})
+	if orderType != bitx.ASK {
+		t.Errorf("Expected OrderType of ASK, got %s", orderType)
+	}
+	if price != 99 {
+		t.Errorf("Expected price of 99, got %f", price)
+	}
+}
