@@ -47,13 +47,13 @@ var ErrOrderNotFound = errors.New("Order not found")
 
 func (ob *OrderBook) handleUpdate(upd *streamerpb.Update) error {
 	if upd.Sequence < ob.sequence {
-		log.Printf("bitx/streamer/client.OrderBook.handleUpdate(): Ignoring "+
+		log.Printf("bitx/streamer/client.OrderBook.handleUpdate: Ignoring "+
 			"update with lower sequence number (order book = %d, update = %d)",
 			ob.sequence, upd.Sequence)
 		return nil
 	}
 	if upd.Sequence != ob.sequence+1 {
-		log.Printf("bitx/streamer/client.OrderBook.handleUpdate(): Out of "+
+		log.Printf("bitx/streamer/client.OrderBook.handleUpdate: Out of "+
 			"sequence update (order book = %d, update = %d)",
 			ob.sequence, upd.Sequence)
 		return ErrOutOfSequence
@@ -90,7 +90,7 @@ func (ob *OrderBook) handleTrade(t *streamerpb.TradeUpdate) error {
 	if !ok {
 		o, ok = ob.Bids[t.OrderId]
 		if !ok {
-			log.Printf("bitx/streamer/client.OrderBook.handleTrade(): Order "+
+			log.Printf("bitx/streamer/client.OrderBook.handleTrade: Order "+
 				"%d not found", t.OrderId)
 			return ErrOrderNotFound
 		}
