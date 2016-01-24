@@ -1,15 +1,15 @@
 package marketmaker
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/bitx/bitx-go"
+	"trading-bot/io"
 )
 
+const botName = "Sexy bot"
 const minVolume = 0.005
 
 type MarketMakerBot struct {
@@ -22,7 +22,7 @@ type MarketMakerBot struct {
 
 func NewBot(apiKey, apiSecret, pair string) *MarketMakerBot {
 	return &MarketMakerBot{
-		Name:      "Sexy bot",
+		Name:      botName,
 		apiKey:    apiKey,
 		apiSecret: apiSecret,
 		pair:      pair,
@@ -40,7 +40,7 @@ func (state marketState) spread() float64 {
 }
 
 func (bot *MarketMakerBot) Execute() error {
-	fmt.Printf("%s is initialising...\n", bot.Name)
+	log("%s is initialising...\n", bot.Name)
 
 	if bot.apiKey == "" || bot.apiSecret == "" {
 		return errors.New("Please supply API key and secret via command flags.")
@@ -56,7 +56,7 @@ func (bot *MarketMakerBot) Execute() error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Error fetching balance: %s", err))
 	}
-	fmt.Printf("Current balance: %f (Reserved: %f)\n", bal, res)
+	log("Current balance: %f (Reserved: %f)\n", bal, res)
 
 	if bal <= minVolume {
 		return errors.New("Insuficcient balance to place an order.")
@@ -66,9 +66,9 @@ func (bot *MarketMakerBot) Execute() error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Market not ripe: %s", err))
 	}
-	fmt.Printf("Current market\n\tspread: %f\n\tbid: %f\n\task: %f\n", marketState.spread(), marketState.bid, marketState.ask)
+	log("Current market\n\tspread: %f\n\tbid: %f\n\task: %f\n", marketState.spread(), marketState.bid, marketState.ask)
 
-	doOrder, err := promptYesNo("Place trade?")
+	doOrder, err := io.PromptYesNo("Place trade?")
 	if err != nil {
 		return errors.New(fmt.Sprintf("Could not get user confirmation: %s", err))
 	}
@@ -80,7 +80,7 @@ func (bot *MarketMakerBot) Execute() error {
 			return errors.New(fmt.Sprintf("Could not place next order: %s", err))
 		}
 
-		doOrder, err = promptYesNo("Place another trade if ready?")
+		doOrder, err = io.PromptYesNo("Place another trade if ready?")
 		if err != nil {
 			return errors.New(fmt.Sprintf("Could not get user confirmation: %s", err))
 		}
@@ -89,10 +89,10 @@ func (bot *MarketMakerBot) Execute() error {
 		if err != nil {
 			return errors.New(fmt.Sprintf("Market not ripe: %s", err))
 		}
-		fmt.Printf("Current market\n\tspread: %f\n\tbid: %f\n\task: %f\n", marketState.spread(), marketState.bid, marketState.ask)
+		log("Current market\n\tspread: %f\n\tbid: %f\n\task: %f\n", marketState.spread(), marketState.bid, marketState.ask)
 	}
 
-	fmt.Printf("\n%s has finished working. Bye.\n")
+	log("\n%s has finished working. Bye.\n")
 	return nil
 }
 
@@ -103,7 +103,7 @@ func getMarketState(c *bitx.Client, lastOrder *bitx.Order, pair string) (state m
 	}
 
 	if len(bids) == 0 || len(asks) == 0 {
-		return marketState{}, errors.New("Not enough liquidity on market")
+		return marketState{}, errors.New("Not enough liquidity on market.")
 	}
 	state = marketState{
 		bid: bids[0].Price,
@@ -118,7 +118,7 @@ func getMarketState(c *bitx.Client, lastOrder *bitx.Order, pair string) (state m
 
 func fetchOrRefreshLastOrder(c *bitx.Client, lastOrder *bitx.Order, pair string) (*bitx.Order, error) {
 	if lastOrder == nil {
-		fmt.Println("Fetching NEW last order...")
+		log("Fetching NEW last order...\n")
 		orders, err := c.ListOrders(pair)
 		if err != nil {
 			return nil, err
@@ -130,37 +130,16 @@ func fetchOrRefreshLastOrder(c *bitx.Client, lastOrder *bitx.Order, pair string)
 	}
 
 	// Refresh order
-	fmt.Printf("Refreshing last order (%s)...\n", lastOrder.Id)
+	log("Refreshing last order (%s)...\n", lastOrder.Id)
 	return c.GetOrder(lastOrder.Id)
 }
 
-func promptYesNo(question string) (yes bool, err error) {
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("%s [Y/n] ", question)
-	text, err := reader.ReadString('\n')
-	if err != nil {
-		return false, err
-	}
-	return isYesString(text), nil
-}
-
-func isYesString(text string) bool {
-	if text == "" {
-		return true
-	}
-	firstChr := strings.ToLower(text)[0]
-	if firstChr == 'y' || firstChr == 10 {
-		return true
-	}
-	return false
-}
-
 func (bot *MarketMakerBot) placeNextOrder(state marketState, volume float64) (order *bitx.Order, err error) {
-	fmt.Printf("Last order: %+v\n", state.lastOrder)
+	log("Last order: %+v\n", state.lastOrder)
 
 	// Check if last order has executed
 	if !shouldPlaceNextOrder(state) {
-		fmt.Println("Order has not completed yet.")
+		log("Order has not completed yet.\n")
 		return state.lastOrder, nil
 	}
 
@@ -185,11 +164,16 @@ func getNextOrderParams(state marketState) (orderType bitx.OrderType, price floa
 }
 
 func (bot *MarketMakerBot) placeOrder(orderType bitx.OrderType, price, volume float64) (*bitx.Order, error) {
-	fmt.Printf("Placing order of type: %s, price: %f, volume: %f\n", orderType, price, volume)
+	log("Placing order of type: %s, price: %f, volume: %f\n", orderType, price, volume)
 	orderId, err := bot.client.PostOrder(bot.pair, orderType, volume, price)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("Order placed! Fetching order details: %s\n", orderId)
+	log("Order placed! Fetching order details: %s\n", orderId)
 	return bot.client.GetOrder(orderId)
+}
+
+func log(format string, a ...interface{}) {
+	b := append([]interface{}{botName}, a...)
+	fmt.Printf("[%s]\t"+format, b...)
 }
