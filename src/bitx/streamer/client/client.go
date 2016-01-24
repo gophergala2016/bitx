@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -17,7 +18,7 @@ type Client struct {
 	pair      string
 	rpcClient streamerpb.StreamerClient
 	orderBook *OrderBook
-	Quit      chan bool
+	queue     *Queue
 }
 
 // ErrInvalidAddress indicates the provided address is not a valid server
@@ -26,7 +27,10 @@ var ErrInvalidAddress = errors.New("invalid address")
 
 // New returns a new client.
 func New(pair string) *Client {
-	cl := &Client{pair: pair, Quit: make(chan bool, 1)}
+	cl := &Client{
+		pair:  pair,
+		queue: NewQueue(),
+	}
 	return cl
 }
 
@@ -45,67 +49,91 @@ func (cl *Client) Connect(address string) error {
 		return err
 	}
 
-	log.Printf("bitx/streamer/client.Connect(): Connected to %s.", address)
+	log.Printf("bitx/streamer/client.Connect: Connected to %s.", address)
 
 	cl.rpcClient = streamerpb.NewStreamerClient(conn)
 
 	return nil
 }
 
-// FetchOrderBook fetches the current order book for the client's pair.
-func (cl *Client) FetchOrderBook() error {
-	log.Printf("bitx/streamer/client.FetchOrderBook(): Fetching order book.")
-	req := &streamerpb.GetOrderBookRequest{
-		Pair: cl.pair,
+// fetchOrderBook fetches the current order book for the client's pair.
+// If it fails it retries indefinitely.
+func (cl *Client) fetchOrderBook() {
+	var retry = 0
+	for {
+		if retry > 0 {
+			time.Sleep(time.Second)
+		}
+		log.Printf("bitx/streamer/client.fetchOrderBook: Fetching order book.")
+		req := &streamerpb.GetOrderBookRequest{
+			Pair: cl.pair,
+		}
+		ob, err := cl.rpcClient.GetOrderBook(context.Background(), req)
+		if err != nil {
+			log.Printf("bitx/streamer/client.fetchOrderBook: Error fetching "+
+				"order book: %v", err)
+			retry++
+			continue
+		}
+		orderBook, err := makeOrderBook(ob)
+		if err != nil {
+			log.Printf("bitx/streamer/client.fetchOrderBook: Error making "+
+				"order book: %v", err)
+			retry++
+			continue
+		}
+		cl.orderBook = orderBook
+		log.Printf("bitx/streamer/client.fetchOrderBook: Built order book "+
+			"with %d order(s).", orderBook.Len())
+		break
 	}
-	ob, err := cl.rpcClient.GetOrderBook(context.Background(), req)
-	if err != nil {
-		return err
-	}
-	orderBook, err := makeOrderBook(ob)
-	if err != nil {
-		return err
-	}
-	cl.orderBook = orderBook
-	log.Printf("bitx/streamer/client.FetchOrderBook(): Built order book with "+
-		"%d order(s).", orderBook.Len())
-	return nil
 }
 
-// Stream listens for trading updates from the server.
-func (cl *Client) Stream() {
-	defer func() {
-		cl.Quit <- true
-	}()
+// StreamForever listens for trading updates from the server.
+func (cl *Client) StreamForever() {
+	cl.fetchOrderBook()
+	go cl.processQueueForever()
+
 	stream, err := cl.rpcClient.StreamUpdates(context.Background(),
 		&streamerpb.StreamUpdatesRequest{Pair: cl.pair})
 	if err != nil {
-		log.Printf("bitx/streamer/client.Stream(): %v", err)
+		log.Printf("bitx/streamer/client.Stream: %v", err)
 		return
 	}
 	for {
 		update, err := stream.Recv()
 		if err == io.EOF {
-			log.Printf("bitx/streamer/client.Stream(): EOF")
+			log.Printf("bitx/streamer/client.Stream: EOF")
 			return
 		}
 		if err != nil {
-			log.Printf("bitx/streamer/client.Stream(): %v", err)
+			log.Printf("bitx/streamer/client.Stream: %v", err)
 			return
 		}
-		log.Printf("bitx/streamer/client.Stream(): Received update "+
-			"(sequence = %d).", update.Sequence)
-		err = cl.orderBook.handleUpdate(update)
-		if err == ErrOutOfSequence {
-			if err := cl.FetchOrderBook(); err != nil {
-				log.Printf("bitx/streamer/client.Stream(): Error refetching "+
-					"order book: %v", err)
+		cl.queue.Enqueue(update)
+		log.Printf("bitx/streamer/client.Stream: Received update: "+
+			"sequence = %d, queue = %d.", update.Sequence, cl.queue.Len())
+	}
+}
+
+func (cl *Client) processQueueForever() {
+	for {
+		func() {
+			obj := cl.queue.Dequeue()
+			if obj == nil {
 				return
 			}
-		}
-		if err != nil {
-			log.Printf("bitx/streamer/client.Stream(): %v", err)
-			return
-		}
+
+			u := obj.(*streamerpb.Update)
+			err := cl.orderBook.handleUpdate(u)
+			if err != nil {
+				log.Printf("bitx/streamer/client.processQueueForever: %v",
+					err)
+				cl.fetchOrderBook()
+			}
+
+			log.Printf("bitx/streamer/client.processQueueForever: Processed "+
+				"update: sequence = %d, queue = %d", u.Sequence, cl.queue.Len())
+		}()
 	}
 }

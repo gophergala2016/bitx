@@ -20,13 +20,5 @@ func main() {
 		log.Fatal(err)
 	}
 
-	go cl.Stream()
-
-	err = cl.FetchOrderBook()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	<-cl.Quit
-	log.Printf("streamer_client: Exiting.")
+	cl.StreamForever()
 }
