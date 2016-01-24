@@ -15,7 +15,7 @@ var Pair = flag.String("currency_pair", "XBTZAR", "Currency to pair trade")
 
 func main() {
 	flag.Parse()
-	fmt.Println("Welcome to the BitX trading bot playground!\n")
+	fmt.Println("Welcome to the BitX trading bot playground!")
 
 	bot := marketmaker.NewBot(*APIKey, *APISecret, *Pair)
 	err := bot.Execute()

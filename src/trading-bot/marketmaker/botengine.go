@@ -171,7 +171,7 @@ func (bot *MarketMakerBot) placeNextOrder(state marketState, volume float64) (or
 
 func shouldPlaceNextOrder(state marketState) bool {
 	// Check if last order has executed
-	return state.lastOrder.State == bitx.Complete
+	return state.lastOrder.State == bitx.Complete && state.spread() > 1
 }
 
 func getNextOrderParams(state marketState) (orderType bitx.OrderType, price float64) {
