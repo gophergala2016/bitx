@@ -13,23 +13,23 @@ import (
 const minVolume = 0.005
 
 type MarketMakerBot struct {
-	Name string
-	apiKey string
+	Name      string
+	apiKey    string
 	apiSecret string
-	pair string
-	client *bitx.Client
+	pair      string
+	client    *bitx.Client
 }
 
 func NewBot(apiKey, apiSecret, pair string) *MarketMakerBot {
 	return &MarketMakerBot{
-		Name: "Sexy bot",
-		apiKey: apiKey,
+		Name:      "Sexy bot",
+		apiKey:    apiKey,
 		apiSecret: apiSecret,
-		pair: pair,
+		pair:      pair,
 	}
 }
 
-func(bot *MarketMakerBot) Execute() error {
+func (bot *MarketMakerBot) Execute() error {
 	fmt.Printf("%s is initialising...\n", bot.Name)
 
 	if bot.apiKey == "" || bot.apiSecret == "" {
@@ -48,7 +48,7 @@ func(bot *MarketMakerBot) Execute() error {
 	}
 	fmt.Printf("Current balance: %f (Reserved: %f)\n", bal, res)
 
-	if (bal <= minVolume) {
+	if bal <= minVolume {
 		return errors.New("Insuficcient balance to place an order.")
 	}
 
@@ -63,7 +63,7 @@ func(bot *MarketMakerBot) Execute() error {
 		return errors.New(fmt.Sprintf("Could not get user confirmation: %s", err))
 	}
 
-	var lastOrder *bitx.Order;
+	var lastOrder *bitx.Order
 	for doOrder {
 		lastOrder, err = bot.placeNextOrder(lastOrder, bid, ask, spread, minVolume)
 		if err != nil {
@@ -121,7 +121,7 @@ func isYesString(text string) bool {
 	return false
 }
 
-func(bot *MarketMakerBot) placeNextOrder(lastOrder *bitx.Order, bid, ask, spread, volume float64) (order *bitx.Order, err error) {
+func (bot *MarketMakerBot) placeNextOrder(lastOrder *bitx.Order, bid, ask, spread, volume float64) (order *bitx.Order, err error) {
 	// Fetch or refresh order
 	if lastOrder == nil {
 		fmt.Println("Fetching NEW last order...")
@@ -151,15 +151,15 @@ func(bot *MarketMakerBot) placeNextOrder(lastOrder *bitx.Order, bid, ask, spread
 
 	// Time to place a new one
 	orderType := bitx.BID
-	price := bid + 1;
+	price := bid + 1
 	if lastOrder != nil && lastOrder.Type == bitx.BID {
 		orderType = bitx.ASK
-		price = ask - 1;
+		price = ask - 1
 	}
 	return bot.placeOrder(orderType, price, volume)
 }
 
-func(bot *MarketMakerBot) placeOrder(orderType bitx.OrderType, price, volume float64) (*bitx.Order, error) {
+func (bot *MarketMakerBot) placeOrder(orderType bitx.OrderType, price, volume float64) (*bitx.Order, error) {
 	fmt.Printf("Placing order of type: %s, price: %f, volume: %f\n", orderType, price, volume)
 	orderId, err := bot.client.PostOrder(bot.pair, orderType, volume, price)
 	if err != nil {
