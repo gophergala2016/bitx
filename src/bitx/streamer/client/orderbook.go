@@ -12,6 +12,7 @@ import (
 	"bitx/streamer/streamerpb"
 )
 
+// OrderBook is a collection of ask and bid orders.
 type OrderBook struct {
 	mu       sync.Mutex
 	sequence int64
@@ -37,7 +38,11 @@ func makeOrderBook(ob *streamerpb.OrderBook) (*OrderBook, error) {
 	return orderBook, nil
 }
 
+// ErrOutOfSequence indicates that the update has a sequence number which not
+// the next in sequence.
 var ErrOutOfSequence = errors.New("Received out-of-sequence update")
+
+// ErrOrderNotFound indicates that the specified order isn't in the order book.
 var ErrOrderNotFound = errors.New("Order not found")
 
 func (ob *OrderBook) handleUpdate(upd *streamerpb.Update) error {
@@ -54,9 +59,6 @@ func (ob *OrderBook) handleUpdate(upd *streamerpb.Update) error {
 		return ErrOutOfSequence
 	}
 	ob.sequence = upd.Sequence
-
-	log.Printf("bitx/streamer/client.OrderBook.handleUpdate(): Received "+
-		"update: %#v", upd)
 
 	// Process trades
 	if tradesRequest := upd.GetTradeUpdate(); tradesRequest != nil &&
@@ -84,9 +86,6 @@ func (ob *OrderBook) handleUpdate(upd *streamerpb.Update) error {
 }
 
 func (ob *OrderBook) handleTrade(t *streamerpb.TradeUpdate) error {
-	log.Printf("bitx/streamer/client.OrderBook.handleTrade(): Received trade "+
-		"%#v", t)
-
 	o, ok := ob.Asks[t.OrderId]
 	if !ok {
 		o, ok = ob.Bids[t.OrderId]
@@ -149,4 +148,9 @@ func printSorted(w io.Writer, orders map[int64]*Order) {
 		fmt.Fprintf(w, "%.2f %.6f\n", float64(o.price)/1e8,
 			float64(o.volume)/1e8)
 	}
+}
+
+// Len returns the total number of asks and bids in the order book.
+func (ob *OrderBook) Len() int {
+	return len(ob.Asks) + len(ob.Bids)
 }
